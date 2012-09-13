@@ -1,37 +1,45 @@
 package de.jacobs1.rrdmon.servlet;
 
-import de.jacobs1.rrdmon.config.ApplicationConfig;
-import de.jacobs1.rrdmon.config.DataSource;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.text.DecimalFormat;
+
+import java.util.Locale;
+
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+
 import org.rrd4j.ConsolFun;
+
 import org.rrd4j.core.FetchData;
 import org.rrd4j.core.FetchRequest;
 import org.rrd4j.core.RrdDb;
 
+import de.jacobs1.rrdmon.config.ApplicationConfig;
+import de.jacobs1.rrdmon.config.DataSource;
+
 /**
- *
- * @author henning
+ * @author  henning
  */
 public class FetchDataServlet extends HttpServlet {
 
-    /** 
+    /**
      * Handles the HTTP <code>GET</code> method.
-     * @param request servlet request
-     * @param response servlet response
-     * @throws ServletException if a servlet-specific error occurs
-     * @throws IOException if an I/O error occurs
+     *
+     * @param   request   servlet request
+     * @param   response  servlet response
+     *
+     * @throws  ServletException  if a servlet-specific error occurs
+     * @throws  IOException       if an I/O error occurs
      */
     @Override
-    protected void doGet(final HttpServletRequest request, final HttpServletResponse response)
-            throws ServletException, IOException {
+    protected void doGet(final HttpServletRequest request, final HttpServletResponse response) throws ServletException,
+        IOException {
 
         final ApplicationConfig config = ApplicationConfig.getInstance();
+
+        Locale.setDefault(Locale.US);
 
         final String[] path = request.getRequestURI().split("/");
 
@@ -42,7 +50,9 @@ public class FetchDataServlet extends HttpServlet {
         for (int i = 1; i < path.length; i++) {
             final String pathElement = path[path.length - 1 - i];
             switch (i) {
-                case 1:
+
+                case 1 :
+
                     // 10m, 1h, 1d, 1w
                     startTime = now + GraphImageServlet.parseTime(pathElement);
                     break;
@@ -50,6 +60,7 @@ public class FetchDataServlet extends HttpServlet {
         }
 
         response.setContentType("application/json");
+
         final PrintWriter out = response.getWriter();
 
         out.write('{');
@@ -73,6 +84,7 @@ public class FetchDataServlet extends HttpServlet {
                 out.write(',');
 
             }
+
             out.write('"');
             out.write(dsName);
             out.write("\":[");
@@ -92,24 +104,21 @@ public class FetchDataServlet extends HttpServlet {
                 if (i > 0) {
                     out.write(',');
                 }
-                
+
                 if (Double.isNaN(val) || Double.isInfinite(val)) {
                     out.write("null");
                 } else {
-                    doubleStr = String.valueOf(val);
-                    decimalSep = doubleStr.indexOf('.');
-                    if (doubleStr.length() - decimalSep > 6) {
-                        out.write(doubleStr.substring(0, decimalSep + 6));
-                    } else {
-                        out.write(doubleStr);
-                    }
+                    doubleStr = String.format("%.6f", val);
+                    out.write(doubleStr);
                 }
-                
+
                 i++;
             }
+
             out.write(']');
             firstVal = false;
         }
+
         out.write('}');
     }
 }
