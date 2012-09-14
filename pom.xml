@@ -4,7 +4,7 @@
     <groupId>de.jacobs1</groupId>
     <artifactId>rrdmon</artifactId>
     <packaging>war</packaging>
-    <version>1.1-SNAPSHOT</version>
+    <version>1.2-SNAPSHOT</version>
     <name>RRD Mon</name>
     <description>Web Graphs from RRD files</description>
     <url>http://www.jacobs1.de</url>
@@ -22,6 +22,11 @@
         </plugins>
     </build>
     <dependencies>
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>13.0</version>
+        </dependency>
         <dependency>
             <groupId>org.rrd4j</groupId>
             <artifactId>rrd4j</artifactId>
