@@ -43,7 +43,7 @@ public class FetchDataServlet extends HttpServlet {
                                     });
     }
 
-    private String getDataJson(final String timeSpec) throws IOException {
+    private String getDataJson(final String timeSpec) throws Exception {
 
         final ApplicationConfig config = ApplicationConfig.getInstance();
 

@@ -247,7 +247,7 @@ public class ApplicationConfig {
         fr.close();
     }
 
-    private void listenForChanges(final String configFile) throws Exception {
+    private void listenForChanges(final String configFile, final String propertiesFile) throws Exception {
         File f = new File(configFile);
 
         String absolutePath = f.getAbsolutePath();
@@ -262,7 +262,7 @@ public class ApplicationConfig {
             try {
                 watch = ws.take();
             } catch (InterruptedException ex) {
-                System.err.println("Interrupted");
+                throw ex;
             }
 
             List<WatchEvent<?>> events = watch.pollEvents();
@@ -270,7 +270,9 @@ public class ApplicationConfig {
             for (WatchEvent<?> event : events) {
                 WatchEvent.Kind<Path> kind = (WatchEvent.Kind<Path>) event.kind();
                 Path context = (Path) event.context();
-                if (configFile.equals(context.getFileName().toString())) {
+                if (configFile.equals(context.getFileName().toString())
+                        || propertiesFile.equals(context.getFileName().toString())) {
+
                     if (kind.equals(StandardWatchEventKinds.ENTRY_MODIFY)) {
                         load();
                     }
@@ -281,11 +283,11 @@ public class ApplicationConfig {
     }
 
     public void load() {
-        final String configFile = "application.properties";
+        final String propertiesFile = "application.properties";
 
         final Properties props = new Properties();
         try {
-            FileReader fr = new FileReader(configFile);
+            FileReader fr = new FileReader(propertiesFile);
             props.load(fr);
             fr.close();
         } catch (IOException ioe) {
@@ -294,9 +296,9 @@ public class ApplicationConfig {
 
         loadDataSourcesFromProperties(props);
 
-        String sourcesFile = "datasources.cfg";
+        String configFile = "datasources.cfg";
         try {
-            loadDataSourcesFromFile(sourcesFile);
+            loadDataSourcesFromFile(configFile);
         } catch (IOException ioe) {
             ioe.printStackTrace();
         }
@@ -304,7 +306,7 @@ public class ApplicationConfig {
         // listen for changes
         if (!listeners) { // already running?
 
-            ThreadConfig threadSourceFile = new ThreadConfig(sourcesFile);
+            ThreadConfig threadSourceFile = new ThreadConfig(configFile, propertiesFile);
             threadSourceFile.start();
             listeners = true;
         }
@@ -313,14 +315,16 @@ public class ApplicationConfig {
     private class ThreadConfig extends Thread {
 
         private String configFile;
+        private String propertiesFile;
 
-        ThreadConfig(final String configFile) {
+        ThreadConfig(final String configFile, final String propertiesFile) {
             this.configFile = configFile;
+            this.propertiesFile = propertiesFile;
         }
 
         public void run() {
             try {
-                listenForChanges(configFile);
+                listenForChanges(configFile, propertiesFile);
             } catch (Exception e) { }
         }
     }
