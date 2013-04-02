@@ -1,9 +1,19 @@
 package de.jacobs1.rrdmon.config;
 
 import java.awt.Color;
+
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardWatchEventKinds;
+import java.nio.file.WatchEvent;
+import java.nio.file.WatchKey;
+import java.nio.file.WatchService;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -12,19 +22,20 @@ import java.util.Properties;
 import java.util.Set;
 
 /**
- *
- * @author henning
+ * @author  henning
  */
 public class ApplicationConfig {
 
     private final Map<String, DataSource> dataSources = new HashMap<String, DataSource>();
     private static ApplicationConfig instance;
+    private static boolean listeners = false;
 
-    public static ApplicationConfig getInstance() {
+    public static ApplicationConfig getInstance() throws Exception {
         if (instance == null) {
             instance = new ApplicationConfig();
             instance.load();
         }
+
         return instance;
     }
 
@@ -84,6 +95,7 @@ public class ApplicationConfig {
                 if (parts.length > 4) {
                     line.setStack(true);
                 }
+
                 ds.getLines().add(line);
                 j++;
             }
@@ -98,6 +110,7 @@ public class ApplicationConfig {
                 if (parts.length > 3) {
                     area.setStack(true);
                 }
+
                 ds.getAreas().add(area);
                 j++;
             }
@@ -106,8 +119,8 @@ public class ApplicationConfig {
         }
     }
 
-    /** 
-     * new style datasources.cfg file 
+    /**
+     * new style datasources.cfg file.
      */
     private void loadDataSourcesFromFile(final String filename) throws IOException {
         final FileReader fr = new FileReader(filename);
@@ -118,24 +131,28 @@ public class ApplicationConfig {
         final Map<String, Integer> hostIndices = new HashMap<String, Integer>();
         String[] keyValue;
 
-        while ((srcline = br.readLine()) != null)   {
+        while ((srcline = br.readLine()) != null) {
             if (srcline.trim().startsWith("#") || srcline.trim().isEmpty()) {
+
                 // comment
                 continue;
             }
 
             if (!srcline.startsWith(" ") && !srcline.startsWith("\t")) {
+
                 // host start
                 keyValue = srcline.split("\\s*=\\s*", 2);
                 lines.add(keyValue[0]);
                 hostIndices.put(keyValue[0], lines.size());
                 if (keyValue.length > 1) {
+
                     // "Preprocessor": include host definition, e.g.
                     // http02 = http01 will include host definition of http01 in http02
-                    for (int i = hostIndices.get(keyValue[1]); i<lines.size(); i++) {
+                    for (int i = hostIndices.get(keyValue[1]); i < lines.size(); i++) {
                         if (!lines.get(i).startsWith(" ") && !lines.get(i).startsWith("\t")) {
                             break;
                         }
+
                         lines.add(lines.get(i));
                     }
                 }
@@ -144,12 +161,12 @@ public class ApplicationConfig {
             }
         }
 
-        
         DataSource ds = null;
         String host = null;
         String nameWithoutHost = null;
-        for (String line : lines)   {
+        for (String line : lines) {
             if (!line.startsWith(" ") && !line.startsWith("\t")) {
+
                 // host start
                 host = line.trim();
             } else {
@@ -157,13 +174,15 @@ public class ApplicationConfig {
                 for (int i = 0; i < line.length(); i++) {
                     if (line.charAt(i) == ' ') {
                         indention++;
-                    }  else if (line.charAt(i) == '\t') {
+                    } else if (line.charAt(i) == '\t') {
+
                         // tabs count as 4 spaces
                         indention += 4;
                     } else {
                         break;
                     }
                 }
+
                 line = line.trim();
                 if (indention <= 4) {
                     keyValue = line.split("\\s*:\\s*", 2);
@@ -178,11 +197,10 @@ public class ApplicationConfig {
                         ds.setVerticalLabel(keyValue[1]);
                     } else if (keyValue[0].equals("statds")) {
                         ds.setStatDsName(keyValue[1]);
-                    } else if(keyValue[0].equals("rrd")) {
+                    } else if (keyValue[0].equals("rrd")) {
                         final DataSource.RrdDataSourceEntry entry = new DataSource.RrdDataSourceEntry();
-                        final String[] parts = keyValue[1]
-                                .replaceAll("%h", host)
-                                .replaceAll("%n", nameWithoutHost).split(":", 3);
+                        final String[] parts = keyValue[1].replaceAll("%h", host).replaceAll("%n", nameWithoutHost)
+                                                          .split(":", 3);
                         entry.setName(parts[0]);
                         entry.setRrdPath(parts[1]);
                         entry.setDsName(parts[2]);
@@ -194,6 +212,7 @@ public class ApplicationConfig {
                         entry.setRpnExpression(parts[1]);
                         ds.getExprDataSources().add(entry);
                         if (ds.getStatDsName() == null) {
+
                             // set default statistics datasource to expression
                             ds.setStatDsName(parts[0]);
                         }
@@ -207,6 +226,7 @@ public class ApplicationConfig {
                         if (parts.length > 4) {
                             gline.setStack(true);
                         }
+
                         ds.getLines().add(gline);
                     } else if (keyValue[0].equals("area")) {
                         final DataSource.GraphArea area = new DataSource.GraphArea();
@@ -217,20 +237,57 @@ public class ApplicationConfig {
                         if (parts.length > 3) {
                             area.setStack(true);
                         }
+
                         ds.getAreas().add(area);
                     }
                 }
             }
         }
+
         fr.close();
     }
 
+    private void listenForChanges(final String configFile, final String propertiesFile) throws Exception {
+        File f = new File(configFile);
+
+        String absolutePath = f.getAbsolutePath();
+        String filePath = absolutePath.substring(0, absolutePath.lastIndexOf(File.separator));
+
+        Path path = Paths.get(filePath);
+        WatchService ws = path.getFileSystem().newWatchService();
+        path.register(ws, StandardWatchEventKinds.ENTRY_MODIFY);
+
+        WatchKey watch = null;
+        while (true) {
+            try {
+                watch = ws.take();
+            } catch (InterruptedException ex) {
+                throw ex;
+            }
+
+            List<WatchEvent<?>> events = watch.pollEvents();
+            watch.reset();
+            for (WatchEvent<?> event : events) {
+                WatchEvent.Kind<Path> kind = (WatchEvent.Kind<Path>) event.kind();
+                Path context = (Path) event.context();
+                if (configFile.equals(context.getFileName().toString())
+                        || propertiesFile.equals(context.getFileName().toString())) {
+
+                    if (kind.equals(StandardWatchEventKinds.ENTRY_MODIFY)) {
+                        load();
+                    }
+                }
+            }
+        }
+
+    }
+
     public void load() {
-        final String configFile = "application.properties";
+        final String propertiesFile = "application.properties";
 
         final Properties props = new Properties();
         try {
-            FileReader fr = new FileReader(configFile);
+            FileReader fr = new FileReader(propertiesFile);
             props.load(fr);
             fr.close();
         } catch (IOException ioe) {
@@ -239,10 +296,36 @@ public class ApplicationConfig {
 
         loadDataSourcesFromProperties(props);
 
+        String configFile = "datasources.cfg";
         try {
-            loadDataSourcesFromFile("datasources.cfg");
+            loadDataSourcesFromFile(configFile);
         } catch (IOException ioe) {
             ioe.printStackTrace();
+        }
+
+        // listen for changes
+        if (!listeners) { // already running?
+
+            ThreadConfig threadSourceFile = new ThreadConfig(configFile, propertiesFile);
+            threadSourceFile.start();
+            listeners = true;
+        }
+    }
+
+    private class ThreadConfig extends Thread {
+
+        private String configFile;
+        private String propertiesFile;
+
+        ThreadConfig(final String configFile, final String propertiesFile) {
+            this.configFile = configFile;
+            this.propertiesFile = propertiesFile;
+        }
+
+        public void run() {
+            try {
+                listenForChanges(configFile, propertiesFile);
+            } catch (Exception e) { }
         }
     }
 }
