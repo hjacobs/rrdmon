@@ -1,21 +1,25 @@
 package de.jacobs1.rrdmon.servlet;
 
-import de.jacobs1.rrdmon.config.ApplicationConfig;
-import de.jacobs1.rrdmon.config.DataSource;
 import java.awt.Color;
+
 import java.io.IOException;
 import java.io.OutputStream;
+
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+
 import org.rrd4j.ConsolFun;
+
 import org.rrd4j.graph.RrdGraph;
 import org.rrd4j.graph.RrdGraphDef;
 
+import de.jacobs1.rrdmon.config.ApplicationConfig;
+import de.jacobs1.rrdmon.config.DataSource;
+
 /**
- *
- * @author henning
+ * @author  henning
  */
 public class GraphImageServlet extends HttpServlet {
 
@@ -25,20 +29,19 @@ public class GraphImageServlet extends HttpServlet {
     private static final int DAY_AGO = HOUR_AGO * 24;
     private static final int WEEK_AGO = DAY_AGO * 7;
 
-    public static byte[] graph(final DataSource dataSource, final long startTime,
-            final long endTime, final int width, final int height) throws IOException {
-
+    public static byte[] graph(final DataSource dataSource, final long startTime, final long endTime, final int width,
+            final int height) throws IOException {
 
         final RrdGraphDef graphDef = new RrdGraphDef();
         graphDef.setImageFormat("png");
         graphDef.setTimeSpan(startTime, endTime);
-
 
         String firstDsName = null;
         for (DataSource.RrdDataSourceEntry entry : dataSource.getRrdDataSources()) {
             if (firstDsName == null) {
                 firstDsName = entry.getName();
             }
+
             graphDef.datasource(entry.getName(), entry.getRrdPath(), entry.getDsName(), ConsolFun.AVERAGE);
         }
 
@@ -64,6 +67,7 @@ public class GraphImageServlet extends HttpServlet {
                 graphDef.line(line.getSrcName(), line.getColor(), line.getLegend(), line.getWidth());
             }
         }
+
         if (!hasLineOrArea) {
             graphDef.line(firstDsName, new Color(0xFF, 0, 0), null, 2);
         }
@@ -72,12 +76,14 @@ public class GraphImageServlet extends HttpServlet {
         if (dataSource.getStatDsName() != null) {
             statDs = dataSource.getStatDsName();
         }
+
         graphDef.gprint(statDs, ConsolFun.MIN, "%10.2lf MIN");
         graphDef.gprint(statDs, ConsolFun.AVERAGE, "%10.2lf AVG");
         graphDef.gprint(statDs, ConsolFun.MAX, "%10.2lf MAX");
         if (dataSource.getVerticalLabel() != null) {
             graphDef.setVerticalLabel(dataSource.getVerticalLabel());
         }
+
         graphDef.setAntiAliasing(true);
         graphDef.setFilename("-");
         graphDef.setShowSignature(false);
@@ -90,31 +96,39 @@ public class GraphImageServlet extends HttpServlet {
 
     public static long parseTime(final String str) {
         switch (str.charAt(str.length() - 1)) {
-            case 's':
+
+            case 's' :
                 return Long.valueOf(str.substring(0, str.length() - 1)) * SECOND_AGO;
-            case 'm':
+
+            case 'm' :
                 return Long.valueOf(str.substring(0, str.length() - 1)) * MINUTE_AGO;
-            case 'h':
+
+            case 'h' :
                 return Long.valueOf(str.substring(0, str.length() - 1)) * HOUR_AGO;
-            case 'd':
+
+            case 'd' :
                 return Long.valueOf(str.substring(0, str.length() - 1)) * DAY_AGO;
-            case 'w':
+
+            case 'w' :
                 return Long.valueOf(str.substring(0, str.length() - 1)) * WEEK_AGO;
-            default:
+
+            default :
                 return HOUR_AGO;
         }
     }
 
-    /** 
+    /**
      * Handles the HTTP <code>GET</code> method.
-     * @param request servlet request
-     * @param response servlet response
-     * @throws ServletException if a servlet-specific error occurs
-     * @throws IOException if an I/O error occurs
+     *
+     * @param   request   servlet request
+     * @param   response  servlet response
+     *
+     * @throws  ServletException  if a servlet-specific error occurs
+     * @throws  IOException       if an I/O error occurs
      */
     @Override
-    protected void doGet(final HttpServletRequest request, final HttpServletResponse response)
-            throws ServletException, IOException {
+    protected void doGet(final HttpServletRequest request, final HttpServletResponse response) throws ServletException,
+        IOException {
 
         final String[] path = request.getRequestURI().split("/");
 
@@ -127,7 +141,9 @@ public class GraphImageServlet extends HttpServlet {
         for (int i = 1; i < path.length; i++) {
             final String pathElement = path[path.length - 1 - i];
             switch (i) {
-                case 1:
+
+                case 1 :
+
                     final String[] widthHeight = pathElement.split("x");
                     if (widthHeight.length == 2) {
                         try {
@@ -137,20 +153,27 @@ public class GraphImageServlet extends HttpServlet {
                             // ignore
                         }
                     }
+
                     break;
-                case 2:
+
+                case 2 :
+
                     // 10m, 1h, 1d, 1w
                     startTime = parseTime(pathElement);
-                    
+
                     break;
-                case 3:
+
+                case 3 :
                     dsName = pathElement;
                     break;
             }
 
         }
 
-        final ApplicationConfig config = ApplicationConfig.getInstance();
+        ApplicationConfig config = null;
+        try {
+            config = ApplicationConfig.getInstance();
+        } catch (Exception e) { }
 
         final DataSource dataSource = config.getDataSource(dsName);
 
@@ -163,6 +186,7 @@ public class GraphImageServlet extends HttpServlet {
         final byte[] image = graph(dataSource, startTime, endTime, width, height);
 
         response.setContentType("image/png");
+
         final OutputStream outputStream = response.getOutputStream();
         try {
             outputStream.write(image);
